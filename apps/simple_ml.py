@@ -33,7 +33,23 @@ def parse_mnist(image_filesname, label_filename):
                 for MNIST will contain the values 0-9.
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    with gzip.open(image_filesname, 'rb') as f:
+        # 跳过前16个字节（魔数、数量、行数、列数）
+        _ = np.frombuffer(f.read(16), dtype=np.uint8)
+        # 读取图像数据
+        buf = f.read()
+        data = np.frombuffer(buf, dtype=np.uint8)
+        # 将数据转换为二维数组
+        X = data.reshape(-1, 28 * 28).astype(np.float32) / 255.0
+
+    with gzip.open(label_filename, 'rb') as f:
+        # 跳过前8个字节（魔数、数量）
+        _ = np.frombuffer(f.read(8), dtype=np.uint8)
+        # 读取标签数据
+        buf = f.read()
+        y = np.frombuffer(buf, dtype=np.uint8)
+    
+    return X, y
     ### END YOUR SOLUTION
 
 
@@ -54,7 +70,19 @@ def softmax_loss(Z, y_one_hot):
         Average softmax loss over the sample. (ndl.Tensor[np.float32])
     """
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    exp_Z = ndl.exp(Z)
+
+    sum_exp_Z = ndl.summation(exp_Z, axes=(1,))
+
+    log_sum_exp_Z = ndl.log(sum_exp_Z)
+
+    correct_logit = ndl.summation(Z * y_one_hot, axes=(1,))
+
+    loss = log_sum_exp_Z - correct_logit
+
+    avg_loss = ndl.summation(loss) / Z.shape[0]
+
+    return avg_loss
     ### END YOUR SOLUTION
 
 
@@ -83,7 +111,32 @@ def nn_epoch(X, y, W1, W2, lr=0.1, batch=100):
     """
 
     ### BEGIN YOUR SOLUTION
-    raise NotImplementedError()
+    num_examples, input_dim = X.shape
+    hidden_dim, num_classes = W2.shape
+
+    for i in range(0, num_examples, batch):
+        X_batch = X[i:i + batch]
+        y_batch = y[i:i + batch]
+        batch_size = X_batch.shape[0]
+
+        Z1 = ndl.Tensor(X_batch) @ W1
+        A1 = ndl.relu(Z1)
+        Z2 = A1 @ W2
+
+        exp_Z2 = ndl.exp(Z2)
+        sum_exp_Z2 = ndl.summation(exp_Z2, axes=(1,))
+        probs = exp_Z2 / sum_exp_Z2.reshape((sum_exp_Z2.shape[0], 1)) 
+
+        I_y = ndl.one_hot(num_classes, ndl.Tensor(y_batch))
+
+        G2 = probs - I_y
+        G1 = ndl.Tensor(Z1.numpy() > 0) * (G2 @ ndl.transpose(W2))  # 第一层梯度
+
+        W2 -= lr * (ndl.transpose(A1) @ G2) / batch_size
+        W1 -= lr * (ndl.transpose(ndl.Tensor(X_batch)) @ G1) / batch_size
+
+    return W1, W2
+
     ### END YOUR SOLUTION
 
 
